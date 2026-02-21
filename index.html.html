@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelFlex | Professional Image Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .custom-loader { transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .processed-badge { display: none; }
+        .is-processed .processed-badge { display: block; }
+        .is-processed .download-options { display: flex; }
+        /* Animation for the bottom bar */
+        #bottomBatchBar { transform: translateY(100%); transition: transform 0.3s ease-out; }
+        #bottomBatchBar.show { transform: translateY(0); }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-900 pb-32">
+
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800">Ahsan's  <span class="text-blue-600">Converter</span></h1>
+                <p class="text-slate-500 text-sm">Batch process up to 100 images locally.</p>
+            </div>
+            <div id="stats" class="text-right text-xs font-mono text-slate-400">
+                FILES: <span id="fileCount">0</span>/100
+            </div>
+        </header>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Quality Level</label>
+                <div class="flex items-center gap-4">
+                    <input type="range" id="qualityRange" min="10" max="100" value="80" class="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                    <span id="qualityVal" class="text-sm font-bold text-blue-600 w-8">80%</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Display Grid</label>
+                <select id="itemsPerRow" class="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm outline-none focus:border-blue-500">
+                     <option value="grid-cols-1">1 per row</option>
+                    <option value="grid-cols-2"selected>2 per row</option>
+                    <option value="grid-cols-3" >3 per row</option>
+                    <option value="grid-cols-4">4 per row</option>
+                     <option value="grid-cols-5">5 per row</option>
+                      <option value="grid-cols-6">6 per row</option>
+                </select>
+            </div>
+
+            <div class="md:col-span-2 flex gap-3">
+                <button id="convertAllBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-all shadow-lg shadow-blue-100 disabled:opacity-50">
+                    Convert All&nbsp;<span style="font-weight:400">(Also Refine Quality)
+                </button>
+                <button id="regenerateBtn" class="hidden flex-1 bg-slate-800 hover:bg-black text-white font-bold py-2.5 rounded-lg transition-all">
+                    Regenerate (Q:80)
+                </button>
+            </div>
+        </div>
+
+        <div id="progressContainer" class="hidden mb-6 bg-white p-4 rounded-xl border border-blue-100">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-blue-700" id="progressStatus">Processing...</span>
+                <span class="text-xs font-bold text-blue-400" id="progressPercent">0%</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+                <div id="progressBar" class="bg-blue-600 h-2 rounded-full custom-loader" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div id="dropZone" class="group border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center hover:bg-blue-50/50 hover:border-blue-400 transition-all cursor-pointer mb-8">
+            <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-50 text-blue-600 rounded-full mb-4 group-hover:scale-110 transition-transform">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-700">Add Images to Start</h3>
+            <p class="text-slate-400 text-sm mt-1">Drag and drop or click to browse files</p>
+        </div>
+
+        <div id="gallery" class="grid gap-6"></div>
+    </div>
+
+    <div id="bottomBatchBar" class="fixed bottom-0 left-0 right-0 bg-slate-900 text-white p-4 shadow-2xl border-t border-slate-700 z-50 flex flex-col md:flex-row items-center justify-center gap-6">
+        <div class="text-sm font-medium">
+            <span class="text-blue-400">All images converted!</span> Download all in one format:
+        </div>
+        <div class="flex items-center gap-3">
+            <select id="batchFormat" class="bg-slate-800 border border-slate-600 text-sm rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="webp">WEBP (Optimized)</option>
+                <option value="pdf">PDF (Document)</option>
+                <option value="gif">GIF</option>
+                <option value="svg">SVG</option>
+            </select>
+            <button onclick="downloadAll()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2 rounded-lg font-bold transition-all shadow-lg">
+                Download All Files
+            </button>
+            <button onclick="location.reload()" class="text-slate-400 hover:text-white text-xs ml-4 underline underline-offset-4">Clear & Start New</button>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const gallery = document.getElementById('gallery');
+        const qualityRange = document.getElementById('qualityRange');
+        const qualityVal = document.getElementById('qualityVal');
+        const progressBar = document.getElementById('progressBar');
+        const progressContainer = document.getElementById('progressContainer');
+        const convertAllBtn = document.getElementById('convertAllBtn');
+        const regenerateBtn = document.getElementById('regenerateBtn');
+        const bottomBatchBar = document.getElementById('bottomBatchBar');
+
+        let uploadedFiles = [];
+
+        // UI Listeners
+        qualityRange.oninput = (e) => {
+            qualityVal.textContent = `${e.target.value}%`;
+            if(e.target.value == 80) regenerateBtn.classList.remove('hidden');
+            else regenerateBtn.classList.add('hidden');
+        };
+
+        document.getElementById('itemsPerRow').onchange = (e) => {
+            gallery.className = `grid gap-6 ${e.target.value}`;
+        };
+
+        dropZone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => handleFiles(e.target.files);
+
+        function handleFiles(files) {
+            const list = Array.from(files);
+            if (uploadedFiles.length + list.length > 100) return alert("Max 100 images allowed.");
+
+            list.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    uploadedFiles.push({
+                        id: Math.random().toString(36).substr(2, 9),
+                        src: e.target.result,
+                        name: file.name,
+                        type: file.type,
+                        processed: false,
+                        blobs: {} 
+                    });
+                    renderGallery();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderGallery() {
+            gallery.innerHTML = '';
+            document.getElementById('fileCount').textContent = uploadedFiles.length;
+            
+            uploadedFiles.forEach(file => {
+                const card = document.createElement('div');
+                card.className = `bg-white p-3 rounded-xl border border-slate-200 shadow-sm transition-all ${file.processed ? 'is-processed border-green-200 bg-green-50/20' : ''}`;
+                card.innerHTML = `
+                    <div class="relative aspect-video mb-3 rounded-lg overflow-hidden bg-slate-100">
+                        <img src="${file.src}" class="w-full h-full object-cover">
+                        <div class="processed-badge absolute top-2 right-2 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">READY</div>
+                        <div class="absolute bottom-2 left-2 bg-black/50 text-white text-[9px] px-2 py-0.5 rounded uppercase font-mono">${file.type.split('/')[1]}</div>
+                    </div>
+                    <div class="mb-3">
+                        <p class="text-xs font-bold truncate text-slate-700">${file.name}</p>
+                    </div>
+                    
+                    <div class="download-options hidden flex-col gap-2">
+                        <hr class="border-slate-100 my-1">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">Step 2: Download As</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="downloadFile('${file.id}', 'webp')" class="text-[10px] bg-white border border-slate-200 py-1.5 rounded hover:bg-blue-600 hover:text-white transition-colors font-bold">WEBP</button>
+                            <button onclick="downloadFile('${file.id}', 'pdf')" class="text-[10px] bg-white border border-slate-200 py-1.5 rounded hover:bg-red-600 hover:text-white transition-colors font-bold">PDF</button>
+                            <button onclick="downloadFile('${file.id}', 'gif')" class="text-[10px] bg-white border border-slate-200 py-1.5 rounded hover:bg-orange-500 hover:text-white transition-colors font-bold">GIF</button>
+                            <button onclick="downloadFile('${file.id}', 'svg')" class="text-[10px] bg-white border border-slate-200 py-1.5 rounded hover:bg-purple-600 hover:text-white transition-colors font-bold">SVG</button>
+                        </div>
+                    </div>
+                `;
+                gallery.appendChild(card);
+            });
+        }
+
+        // Conversion Engine
+        convertAllBtn.onclick = async () => {
+            if (uploadedFiles.length === 0) return;
+            
+            progressContainer.classList.remove('hidden');
+            const quality = qualityRange.value / 100;
+            
+            for (let i = 0; i < uploadedFiles.length; i++) {
+                const file = uploadedFiles[i];
+                await processImage(file, quality);
+                
+                const percent = Math.round(((i + 1) / uploadedFiles.length) * 100);
+                progressBar.style.width = percent + '%';
+                document.getElementById('progressPercent').textContent = percent + '%';
+                document.getElementById('progressStatus').textContent = `Converting: ${file.name}`;
+            }
+
+            setTimeout(() => {
+                progressContainer.classList.add('hidden');
+                renderGallery();
+                // Show bottom bar when everything is ready
+                bottomBatchBar.classList.add('show');
+            }, 800);
+        };
+
+        regenerateBtn.onclick = () => {
+            qualityRange.value = 80;
+            qualityVal.textContent = "80%";
+            convertAllBtn.click();
+        };
+
+        async function processImage(file, quality) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    // Pre-generate WebP Blob
+                    canvas.toBlob((blob) => {
+                        file.blobs['webp'] = URL.createObjectURL(blob);
+                        file.processed = true;
+                        resolve();
+                    }, 'image/webp', quality);
+                };
+                img.src = file.src;
+            });
+        }
+
+        // Batch Downloader
+        window.downloadAll = () => {
+            const format = document.getElementById('batchFormat').value;
+            uploadedFiles.forEach((file, index) => {
+                // Delay each download slightly to prevent browser blocking multiple popups
+                setTimeout(() => {
+                    downloadFile(file.id, format);
+                }, index * 200);
+            });
+        };
+
+        // Individual Downloader
+        window.downloadFile = (id, format) => {
+            const file = uploadedFiles.find(f => f.id === id);
+            const name = file.name.split('.')[0];
+
+            if (format === 'webp') {
+                triggerDownload(file.blobs['webp'], `${name}.webp`);
+            } else if (format === 'pdf') {
+                const { jsPDF } = window.jspdf;
+                const img = new Image();
+                img.src = file.src;
+                img.onload = () => {
+                    const pdf = new jsPDF(img.width > img.height ? 'l' : 'p', 'px', [img.width, img.height]);
+                    pdf.addImage(img, 'JPEG', 0, 0, img.width, img.height);
+                    pdf.save(`${name}.pdf`);
+                };
+            } else if (format === 'svg') {
+                const svgTag = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><image href="${file.src}" width="100%" height="100%"/></svg>`;
+                const blob = new Blob([svgTag], {type: 'image/svg+xml'});
+                triggerDownload(URL.createObjectURL(blob), `${name}.svg`);
+            } else if (format === 'gif') {
+                triggerDownload(file.src, `${name}.gif`);
+            }
+        };
+
+        function triggerDownload(url, filename) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+        }
+    </script>
+</body>
+</html>
